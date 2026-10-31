@@ -24,4 +24,6 @@
 
 ## Демонстрация
 
-[![Запись установки пакета и работы с таблицами](https://asciinema.org/a/SNsTmT5gSOY4Jwvj.svg)](https://asciinema.org/a/SNsTmT5gSOY4Jwvj)
+[![Запись установки пакета и работы с таблицами](https://asciinema.org/a/SNsTmT5gSOY4Jwvj.png)](https://asciinema.org/a/SNsTmT5gSOY4Jwvj)
+
+[Посмотреть запись на asciinema.org](https://asciinema.org/a/SNsTmT5gSOY4Jwvj)
