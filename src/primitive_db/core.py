@@ -1,9 +1,20 @@
+import json
+from copy import deepcopy
+
+from primitive_db.decorators import (
+    confirm_action,
+    create_cacher,
+    handle_db_errors,
+    log_time,
+)
 from primitive_db.types import Metadata, Row, TableData, Value
 from primitive_db.utils import load_table_data
 
 SUPPORTED_TYPES = {"int", "str", "bool"}
+_cache_select = create_cacher()
 
 
+@handle_db_errors
 def create_table(
     metadata: dict[str, list[str]], table_name: str, columns: list[str]
 ) -> dict[str, list[str]]:
@@ -40,6 +51,8 @@ def create_table(
     return metadata
 
 
+@handle_db_errors
+@confirm_action("удаление таблицы")
 def drop_table(
     metadata: dict[str, list[str]], table_name: str
 ) -> dict[str, list[str]]:
@@ -68,6 +81,8 @@ def validate_fields(schema: dict[str, str], fields: Row) -> None:
             raise ValueError(f'{column}={value!r}: ожидается {schema[column]}')
 
 
+@handle_db_errors
+@log_time
 def insert(metadata: Metadata, table_name: str, values: list[Value]) -> TableData:
     schema = table_schema(metadata, table_name)
     columns = [column for column in schema if column != "ID"]
@@ -81,23 +96,37 @@ def insert(metadata: Metadata, table_name: str, values: list[Value]) -> TableDat
     return table_data
 
 
+@handle_db_errors
+@log_time
 def select(table_data: TableData, where_clause: Row | None = None) -> TableData:
-    if where_clause is None:
-        return table_data.copy()
-    return [
-        row for row in table_data
-        if all(row.get(column) == value for column, value in where_clause.items())
-    ]
+    # Data is part of the key: inserts, updates, deletes and external file
+    # changes cannot return a result cached for an older table snapshot.
+    key = json.dumps([table_data, where_clause], sort_keys=True, ensure_ascii=False)
+
+    def get_rows() -> TableData:
+        if where_clause is None:
+            return deepcopy(table_data)
+        return deepcopy([
+            row for row in table_data
+            if all(row.get(column) == value for column, value in where_clause.items())
+        ])
+
+    # Callers must not be able to change the cached rows through the result.
+    return deepcopy(_cache_select(key, get_rows))
 
 
+@handle_db_errors
 def update(table_data: TableData, set_clause: Row, where_clause: Row) -> TableData:
     if "ID" in set_clause:
         raise ValueError("ID генерируется автоматически и не может быть изменён")
-    for row in select(table_data, where_clause):
-        row.update(set_clause)
+    for row in table_data:
+        if all(row.get(column) == value for column, value in where_clause.items()):
+            row.update(set_clause)
     return table_data
 
 
+@handle_db_errors
+@confirm_action("удаление записей")
 def delete(table_data: TableData, where_clause: Row) -> TableData:
     return [
         row for row in table_data

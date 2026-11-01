@@ -14,6 +14,7 @@ from primitive_db.core import (
     update,
     validate_fields,
 )
+from primitive_db.decorators import handle_db_errors
 from primitive_db.parser import parse_set, parse_values, parse_where, tokenize
 from primitive_db.types import Metadata
 from primitive_db.utils import (
@@ -60,6 +61,7 @@ def print_help() -> None:
     print("<command> help - справочная информация")
 
 
+@handle_db_errors
 def execute_data_command(user_input: str, metadata: Metadata) -> None:
     """Parse a CRUD command, validate it and persist its result."""
     tokens = tokenize(user_input)
@@ -98,6 +100,8 @@ def execute_data_command(user_input: str, metadata: Metadata) -> None:
 
     if operation == "insert":
         data = insert(metadata, table_name, values)
+        if data is None:
+            return
         save_table_data(table_name, data)
         print(
             f'Запись с ID={data[-1]["ID"]} успешно добавлена '
@@ -109,7 +113,10 @@ def execute_data_command(user_input: str, metadata: Metadata) -> None:
     if operation == "select":
         result = PrettyTable()
         result.field_names = list(schema)
-        for row in select(data, where_clause):
+        rows = select(data, where_clause)
+        if rows is None:
+            return
+        for row in rows:
             result.add_row([row[column] for column in schema])
         print(result)
     elif operation == "info":
@@ -117,7 +124,10 @@ def execute_data_command(user_input: str, metadata: Metadata) -> None:
         print("Столбцы: " + ", ".join(metadata[table_name]))
         print(f"Количество записей: {len(data)}")
     else:
-        matched = select(data, where_clause)
+        matched = [
+            row for row in data
+            if all(row.get(column) == value for column, value in where_clause.items())
+        ]
         if not matched:
             print("Записи по условию не найдены.")
             return
@@ -125,6 +135,8 @@ def execute_data_command(user_input: str, metadata: Metadata) -> None:
             changed = update(data, set_clause, where_clause)
         else:
             changed = delete(data, where_clause)
+        if changed is None:
+            return
         save_table_data(table_name, changed)
         for row in matched:
             if operation == "update":
@@ -157,49 +169,51 @@ def run() -> None:
         except (EOFError, KeyboardInterrupt):
             print()
             return
-        try:
-            command_name = (user_input or "").split(maxsplit=1)
-            if command_name and command_name[0] in {
-                "insert", "select", "update", "delete", "info"
-            }:
-                execute_data_command(user_input, metadata)
-                continue
-            args = shlex.split(user_input or "")
-            if not args:
-                continue
-            command, *arguments = args
-            if command in {"help", "exit", "list_tables"}:
-                if arguments:
-                    raise ValueError(" ".join(arguments))
-                if command == "exit":
-                    return
-                if command == "help":
-                    print_help()
-                elif command == "list_tables":
-                    if metadata:
-                        for name in metadata:
-                            print(f"- {name}")
-                    else:
-                        print("Таблиц пока нет.")
-            elif command in {"create_table", "drop_table"}:
-                if (command == "create_table" and len(arguments) < 2) or (
-                    command == "drop_table" and len(arguments) != 1
-                ):
-                    raise ValueError(" ".join(args))
-                previous = metadata.copy()
-                if command == "create_table":
-                    create_table(metadata, arguments[0], arguments[1:])
-                else:
-                    drop_table(metadata, arguments[0])
-                if metadata != previous:
-                    if command == "create_table":
-                        save_table_data(arguments[0], [])
-                    else:
-                        table_path(arguments[0]).unlink(missing_ok=True)
-                    save_metadata(METADATA_FILE, metadata)
+        if execute_command(user_input or "", metadata) is False:
+            return
+
+
+@handle_db_errors
+def execute_command(user_input: str, metadata: Metadata) -> bool:
+    command_name = (user_input or "").split(maxsplit=1)
+    if command_name and command_name[0] in {
+        "insert", "select", "update", "delete", "info"
+    }:
+        execute_data_command(user_input, metadata)
+        return True
+    args = shlex.split(user_input or "")
+    if not args:
+        return True
+    command, *arguments = args
+    if command in {"help", "exit", "list_tables"}:
+        if arguments:
+            raise ValueError(" ".join(arguments))
+        if command == "exit":
+            return False
+        if command == "help":
+            print_help()
+        elif command == "list_tables":
+            if metadata:
+                for name in metadata:
+                    print(f"- {name}")
             else:
-                print(f"Функции {command} нет. Попробуйте снова.")
-        except ValueError as error:
-            print(f"Некорректное значение: {error}. Попробуйте снова.")
-        except (OSError, json.JSONDecodeError) as error:
-            print(f"Ошибка работы с файлами: {error}")
+                print("Таблиц пока нет.")
+    elif command in {"create_table", "drop_table"}:
+        if (command == "create_table" and len(arguments) < 2) or (
+            command == "drop_table" and len(arguments) != 1
+        ):
+            raise ValueError(" ".join(args))
+        previous = metadata.copy()
+        if command == "create_table":
+            create_table(metadata, arguments[0], arguments[1:])
+        else:
+            drop_table(metadata, arguments[0])
+        if metadata != previous:
+            if command == "create_table":
+                save_table_data(arguments[0], [])
+            else:
+                table_path(arguments[0]).unlink(missing_ok=True)
+            save_metadata(METADATA_FILE, metadata)
+    else:
+        print(f"Функции {command} нет. Попробуйте снова.")
+    return True
