@@ -1,11 +1,10 @@
 import ast
 import re
 
+from primitive_db.constants import TOKEN_PATTERN
 from primitive_db.types import Row, Value
 
-TOKEN = re.compile(
-    r'''\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_\u0080-\uffff]\w*|-?\d+|[(),=])'''
-)
+TOKEN = re.compile(TOKEN_PATTERN)
 
 
 def tokenize(text: str) -> list[str]:
@@ -24,6 +23,7 @@ def tokenize(text: str) -> list[str]:
 
 
 def parse_value(token: str) -> Value:
+    """Convert a quoted string, integer or boolean token to a value."""
     if token.startswith(('"', "'")):
         try:
             value = ast.literal_eval(token)
@@ -39,6 +39,7 @@ def parse_value(token: str) -> Value:
 
 
 def parse_where(text: str) -> Row:
+    """Parse one column equality into a condition dictionary."""
     tokens = tokenize(text)
     if len(tokens) != 3 or not tokens[0].isidentifier() or tokens[1] != "=":
         raise ValueError(text)
@@ -46,6 +47,7 @@ def parse_where(text: str) -> Row:
 
 
 def parse_set(text: str) -> Row:
+    """Parse comma-separated column assignments."""
     tokens = tokenize(text)
     result = {}
     while tokens:
@@ -65,6 +67,7 @@ def parse_set(text: str) -> Row:
 
 
 def parse_values(tokens: list[str]) -> list[Value]:
+    """Parse a parenthesized list of comma-separated values."""
     if len(tokens) < 3 or tokens[0] != "(" or tokens[-1] != ")":
         raise ValueError("Ожидаются значения в круглых скобках")
     values = tokens[1:-1]

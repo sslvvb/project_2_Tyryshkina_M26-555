@@ -2,6 +2,7 @@ import json
 from os import PathLike
 from pathlib import Path
 
+from primitive_db.constants import DATA_DIR
 from primitive_db.types import TableData
 
 
@@ -46,6 +47,7 @@ def save_table_data(table_name: str, data: TableData) -> None:
 
 
 def table_path(table_name: str) -> Path:
+    """Return the data file path for a valid table name."""
     if not table_name.isidentifier():
         raise ValueError(table_name)
-    return Path("data") / f"{table_name}.json"
+    return Path(DATA_DIR) / f"{table_name}.json"

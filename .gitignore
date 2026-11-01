@@ -5,3 +5,5 @@ __pycache__/
 *.egg-info
 db_meta.json
 data/
+.DS_Store
+.ruff_cache/
