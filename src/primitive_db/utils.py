@@ -1,5 +1,8 @@
 import json
 from os import PathLike
+from pathlib import Path
+
+from primitive_db.types import TableData
 
 
 def load_metadata(filepath: str | PathLike[str]) -> dict[str, list[str]]:
@@ -18,3 +21,31 @@ def save_metadata(
     with open(filepath, "w", encoding="utf-8") as file:
         json.dump(data, file, ensure_ascii=False, indent=2)
         file.write("\n")
+
+
+def load_table_data(table_name: str) -> TableData:
+    """Read rows from the table's JSON file."""
+    path = table_path(table_name)
+    try:
+        with path.open(encoding="utf-8") as file:
+            data = json.load(file)
+    except FileNotFoundError:
+        return []
+    if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+        raise ValueError(f"Повреждены данные таблицы {table_name}")
+    return data
+
+
+def save_table_data(table_name: str, data: TableData) -> None:
+    """Create the data directory and persist rows."""
+    path = table_path(table_name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
+        file.write("\n")
+
+
+def table_path(table_name: str) -> Path:
+    if not table_name.isidentifier():
+        raise ValueError(table_name)
+    return Path("data") / f"{table_name}.json"
