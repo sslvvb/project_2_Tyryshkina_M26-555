@@ -12,8 +12,10 @@ R = TypeVar("R")
 
 
 def handle_db_errors(func: Callable[P, R]) -> Callable[P, R | None]:
+    """Report database exceptions without stopping the command loop."""
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
+        """Run the wrapped operation with the added decorator behavior."""
         try:
             return func(*args, **kwargs)
         except FileNotFoundError:
@@ -35,9 +37,12 @@ def handle_db_errors(func: Callable[P, R]) -> Callable[P, R | None]:
 def confirm_action(
     action_name: str,
 ) -> Callable[[Callable[P, R]], Callable[P, R | None]]:
+    """Require an explicit y before performing a destructive action."""
     def decorator(func: Callable[P, R]) -> Callable[P, R | None]:
+        """Wrap an operation with a confirmation prompt."""
         @wraps(func)
         def wrapper(*args: P.args, **kwargs: P.kwargs) -> R | None:
+            """Run the wrapped operation with the added decorator behavior."""
             try:
                 answer = prompt.string(
                     f'Вы уверены, что хотите выполнить "{action_name}"? [y/n]: ',
@@ -57,8 +62,10 @@ def confirm_action(
 
 
 def log_time(func: Callable[P, R]) -> Callable[P, R]:
+    """Print execution duration while preserving the function result."""
     @wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        """Run the wrapped operation with the added decorator behavior."""
         started = monotonic()
         try:
             return func(*args, **kwargs)
@@ -70,9 +77,11 @@ def log_time(func: Callable[P, R]) -> Callable[P, R]:
 
 
 def create_cacher() -> Callable[[Hashable, Callable[[], R]], R]:
+    """Create a function that stores successful results in a closure."""
     cache = {}
 
     def cache_result(key: Hashable, value_func: Callable[[], R]) -> R:
+        """Return a cached value or compute and remember it."""
         if key not in cache:
             cache[key] = value_func()
         return cache[key]

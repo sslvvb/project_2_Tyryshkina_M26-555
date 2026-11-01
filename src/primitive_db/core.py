@@ -1,6 +1,7 @@
 import json
 from copy import deepcopy
 
+from primitive_db.constants import PYTHON_TYPES, SUPPORTED_TYPES
 from primitive_db.decorators import (
     confirm_action,
     create_cacher,
@@ -10,7 +11,6 @@ from primitive_db.decorators import (
 from primitive_db.types import Metadata, Row, TableData, Value
 from primitive_db.utils import load_table_data
 
-SUPPORTED_TYPES = {"int", "str", "bool"}
 _cache_select = create_cacher()
 
 
@@ -66,6 +66,7 @@ def drop_table(
 
 
 def table_schema(metadata: Metadata, table_name: str) -> dict[str, str]:
+    """Return column types for an existing table."""
     if table_name not in metadata:
         raise ValueError(f'Таблица "{table_name}" не существует')
     return dict(column.split(":") for column in metadata[table_name])
@@ -73,17 +74,17 @@ def table_schema(metadata: Metadata, table_name: str) -> dict[str, str]:
 
 def validate_fields(schema: dict[str, str], fields: Row) -> None:
     """Reject unknown columns and values that do not match the schema."""
-    python_types = {"int": int, "str": str, "bool": bool}
     for column, value in fields.items():
         if column not in schema:
             raise ValueError(f'Столбец "{column}" не существует')
-        if type(value) is not python_types[schema[column]]:
+        if type(value) is not PYTHON_TYPES[schema[column]]:
             raise ValueError(f'{column}={value!r}: ожидается {schema[column]}')
 
 
 @handle_db_errors
 @log_time
 def insert(metadata: Metadata, table_name: str, values: list[Value]) -> TableData:
+    """Validate values and append a row with an automatically generated ID."""
     schema = table_schema(metadata, table_name)
     columns = [column for column in schema if column != "ID"]
     if len(values) != len(columns):
@@ -101,9 +102,11 @@ def insert(metadata: Metadata, table_name: str, values: list[Value]) -> TableDat
 def select(table_data: TableData, where_clause: Row | None = None) -> TableData:
     # Data is part of the key: inserts, updates, deletes and external file
     # changes cannot return a result cached for an older table snapshot.
+    """Return isolated, cached rows matching an optional equality condition."""
     key = json.dumps([table_data, where_clause], sort_keys=True, ensure_ascii=False)
 
     def get_rows() -> TableData:
+        """Compute a fresh query result for the current table snapshot."""
         if where_clause is None:
             return deepcopy(table_data)
         return deepcopy([
@@ -117,6 +120,7 @@ def select(table_data: TableData, where_clause: Row | None = None) -> TableData:
 
 @handle_db_errors
 def update(table_data: TableData, set_clause: Row, where_clause: Row) -> TableData:
+    """Update matching rows while preserving their generated IDs."""
     if "ID" in set_clause:
         raise ValueError("ID генерируется автоматически и не может быть изменён")
     for row in table_data:
@@ -128,6 +132,7 @@ def update(table_data: TableData, set_clause: Row, where_clause: Row) -> TableDa
 @handle_db_errors
 @confirm_action("удаление записей")
 def delete(table_data: TableData, where_clause: Row) -> TableData:
+    """Return rows remaining after confirmed deletion."""
     return [
         row for row in table_data
         if not all(row.get(column) == value for column, value in where_clause.items())

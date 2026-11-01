@@ -4,6 +4,7 @@ import shlex
 import prompt
 from prettytable import PrettyTable
 
+from primitive_db.constants import META_FILE
 from primitive_db.core import (
     create_table,
     delete,
@@ -24,8 +25,6 @@ from primitive_db.utils import (
     save_table_data,
     table_path,
 )
-
-METADATA_FILE = "db_meta.json"
 
 
 def print_help() -> None:
@@ -157,7 +156,7 @@ def run() -> None:
     print_help()
     while True:
         try:
-            metadata = load_metadata(METADATA_FILE)
+            metadata = load_metadata(META_FILE)
         except (OSError, json.JSONDecodeError) as error:
             print(f"Ошибка чтения метаданных: {error}")
             return
@@ -175,6 +174,7 @@ def run() -> None:
 
 @handle_db_errors
 def execute_command(user_input: str, metadata: Metadata) -> bool:
+    """Dispatch a command and return False when the user exits."""
     command_name = (user_input or "").split(maxsplit=1)
     if command_name and command_name[0] in {
         "insert", "select", "update", "delete", "info"
@@ -213,7 +213,7 @@ def execute_command(user_input: str, metadata: Metadata) -> bool:
                 save_table_data(arguments[0], [])
             else:
                 table_path(arguments[0]).unlink(missing_ok=True)
-            save_metadata(METADATA_FILE, metadata)
+            save_metadata(META_FILE, metadata)
     else:
         print(f"Функции {command} нет. Попробуйте снова.")
     return True
