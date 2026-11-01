@@ -51,3 +51,8 @@ def table_path(table_name: str) -> Path:
     if not table_name.isidentifier():
         raise ValueError(table_name)
     return Path(DATA_DIR) / f"{table_name}.json"
+
+
+def remove_table_data(table_name: str) -> None:
+    """Remove a dropped table's data file if it exists."""
+    table_path(table_name).unlink(missing_ok=True)
