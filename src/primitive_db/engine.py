@@ -21,9 +21,9 @@ from primitive_db.types import Metadata
 from primitive_db.utils import (
     load_metadata,
     load_table_data,
+    remove_table_data,
     save_metadata,
     save_table_data,
-    table_path,
 )
 
 
@@ -212,7 +212,7 @@ def execute_command(user_input: str, metadata: Metadata) -> bool:
             if command == "create_table":
                 save_table_data(arguments[0], [])
             else:
-                table_path(arguments[0]).unlink(missing_ok=True)
+                remove_table_data(arguments[0])
             save_metadata(META_FILE, metadata)
     else:
         print(f"Функции {command} нет. Попробуйте снова.")
